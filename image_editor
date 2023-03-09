@@ -1,0 +1,640 @@
+#include <stdio.h>
+#include <string.h>
+#include <math.h>
+#include <stdlib.h>
+#include <ctype.h>
+const double edge[3][3] = {{-1, -1, -1}, {-1, 8, -1}, {-1, -1, -1}},
+		sharpen[3][3] = {{0, -1, 0}, {-1, 5, -1}, {0, -1, 0}},
+		blur[3][3] = {{1.0 / 9, 1.0 / 9, 1.0 / 9},
+		{1.0 / 9, 1.0 / 9, 1.0 / 9}, {1.0 / 9, 1.0 / 9, 1.0 / 9}},
+		gauss[3][3] = {{1.0 / 16, 2.0 / 16, 1.0 / 16},
+		{2.0 / 16, 4.0 / 16, 2.0 / 16}, {1.0 / 16, 2.0 / 16, 1.0 / 16}};
+typedef struct caracteristici {
+	int inaltime, latime, x1, x2, y1, y2;///cl  1---> gri    0-->rgb
+	int ok, cl, maxi;
+	char tip[3];
+	double **gri, **rosu, **verde, **albastru;/// x latime y inaltime
+} img;
+void free_img(img *imagine)
+{
+	if (strcmp(imagine->tip, "P3") == 0 || strcmp(imagine->tip, "P6") == 0) {
+		for (int i = 0 ; i < imagine->inaltime; i++) {
+			free(imagine->rosu[i]);
+			free(imagine->verde[i]);
+			free(imagine->albastru[i]);
+		}
+		free(imagine->rosu);
+		free(imagine->verde);
+		free(imagine->albastru);
+	} else {
+		for (int i = 0 ; i < imagine->inaltime; i++)
+			free(imagine->gri[i]);
+		free(imagine->gri);
+	}
+}
+
+void sterge_com(FILE *in)
+{
+	char caracter;
+	fscanf(in, "%c", &caracter);
+	if (caracter == '\n')
+		fscanf(in, "%c", &caracter);
+	if (caracter == '#')
+		while (caracter != '\n')
+			fscanf(in, "%c", &caracter);
+	else
+		fseek(in, -1, SEEK_CUR);
+}
+
+void incarcare(img *imagine)
+{
+	char filename[100];
+	if (imagine->ok == 1)
+		free_img(imagine);
+	scanf("%s", filename);
+	FILE *in = fopen(filename, "rt");
+	if (in == 0) {
+		imagine->ok = 0;
+		printf("Failed to load %s\n", filename);
+		return;
+	}
+	sterge_com(in);
+	fscanf(in, "%s", imagine->tip);
+	sterge_com(in);
+	fscanf(in, "%d%d", &imagine->latime, &imagine->inaltime);
+	sterge_com(in);
+	fscanf(in, "%d", &imagine->maxi);
+	sterge_com(in);
+	///aloc memoria pentru matricea imagine
+	if (strcmp(imagine->tip, "P5") == 0  || strcmp(imagine->tip, "P2") == 0) {
+		imagine->cl = 1;
+		double **matrice;
+		matrice = (double **)malloc(imagine->inaltime * sizeof(double *));
+		for (int i = 0; i < imagine->inaltime; i++)
+			matrice[i] = malloc(imagine->latime * sizeof(double));
+		imagine->gri = matrice;
+	} else {
+		imagine->cl = 0;
+		double **matrice, **matrice1, **matrice2;
+		matrice = (double **)malloc(imagine->inaltime * sizeof(double *));
+		for (int i = 0; i < imagine->inaltime; i++)
+			matrice[i] = malloc(imagine->latime * sizeof(double));
+		matrice1 = (double **)malloc(imagine->inaltime * sizeof(double *));
+		for (int i = 0; i < imagine->inaltime; i++)
+			matrice1[i] = malloc(imagine->latime * sizeof(double));
+		matrice2 = (double **)malloc(imagine->inaltime * sizeof(double *));
+		for (int i = 0; i < imagine->inaltime; i++)
+			matrice2[i] = malloc(imagine->latime * sizeof(double));
+		imagine->rosu = matrice;
+		imagine->verde = matrice1;
+		imagine->albastru = matrice2;
+	}
+	if (strcmp(imagine->tip, "P3") == 0 || strcmp(imagine->tip, "P2") == 0) {
+		if (strcmp(imagine->tip, "P3") == 0) {
+			for (int i = 0; i < imagine->inaltime; i++) {
+				for (int j = 0; j < imagine->latime; j++) {
+					fscanf(in, "%lf", &imagine->rosu[i][j]);
+					fscanf(in, "%lf", &imagine->verde[i][j]);
+					fscanf(in, "%lf", &imagine->albastru[i][j]);
+				}
+			}
+		} else {
+			for (int i = 0; i < imagine->inaltime; i++)
+				for (int j = 0; j < imagine->latime; j++)
+					fscanf(in, "%lf", &imagine->gri[i][j]);
+		}
+	} else {
+		fscanf(in,"\n");
+		FILE *inbinar = fopen(filename, "rb");
+		if (inbinar == NULL) {
+			fprintf(stdout, "Failed to load %s\n", filename);
+			return;
+		}
+		fseek(inbinar, ftell(in), SEEK_SET);
+		for (int i = 0; i < imagine->inaltime; i++) {
+			for (int j = 0; j < imagine->latime; j++) {
+				if (strcmp(imagine->tip, "P5") == 0) {
+					unsigned char x;
+					fread(&x, sizeof(unsigned char), 1, inbinar);
+					imagine->gri[i][j] = (double)x;
+				} else {
+					imagine->cl = 0;
+					unsigned char x, y, z;
+					fread(&x, sizeof(unsigned char), 1, inbinar);
+					fread(&y, sizeof(unsigned char), 1, inbinar);
+					fread(&z, sizeof(unsigned char), 1, inbinar);
+					imagine->rosu[i][j] = (double)x;
+					imagine->verde[i][j] = (double)y;
+					imagine->albastru[i][j] = (double)z;
+				}
+			}
+		}
+	}
+	imagine->ok = 1;
+	fprintf(stdout, "Loaded %s\n", filename);
+	fclose(in);
+	imagine->x2 = imagine->latime;
+	imagine->y2 =imagine->inaltime;
+	imagine->x1 = 0;
+	imagine->y1 = 0;
+}
+
+void selecta(img *imagine)
+{
+	char comanda[100];
+	scanf("%s",comanda);
+	if (strcmp(comanda, "ALL") == 0) {
+		if (imagine->ok == 1 ) {
+			imagine->x2 = imagine->latime;
+			imagine->y2 =imagine->inaltime;
+			imagine->x1 = 0;
+			imagine->y1 = 0;
+			fprintf(stdout, "Selected ALL\n");
+		} else{
+			fprintf(stdout, "No image loaded\n");
+			return;
+		}
+		return;
+	}
+	if (imagine->ok == 0) {
+		int a , b, c;
+		scanf("%d%d%d", &a, &b, &c);
+		fprintf(stdout, "No image loaded\n");
+			return;
+	} else {
+		int x1, x2, y1, y2;
+		x1 = atoi(comanda);
+		int aux;
+		if (scanf("%d%d%d", &y1, &x2, &y2) != 3) {
+			fprintf(stdout, "Invalid command\n");
+			return;
+		}
+		if (x1 > x2) {
+			aux = x1;
+			x1 = x2;
+			x2=aux;
+		}
+		if (y1 > y2) {
+			aux = y1;
+			y1 = y2;
+			y2 = aux;
+		}
+		if (x1 >= 0 && y1 >= 0 && x2 <= imagine->latime && 
+			y2 <= imagine->inaltime && y1 < y2 && x1 < x2) {
+				imagine->x1 = x1;
+				imagine->x2 = x2;
+				imagine->y1 = y1;
+				imagine->y2 = y2;
+				fprintf(stdout, "Selected %d %d %d %d\n", x1, y1, x2, y2);
+			}
+			else
+			fprintf(stdout, "Invalid set of coordinates\n");
+	}
+}
+
+void histograma(img imagine)
+{
+	int interval, stelute;
+	if (imagine.ok == 0) {
+		scanf("%*d%*d");
+		fprintf(stdout, "No image loaded\n");
+		return;
+	}
+	char caracter;
+	scanf("%c", &caracter);
+	if (caracter == '\n') {
+		fprintf(stdout, "Invalid command\n");
+		return;
+	}
+	int x, y, z;
+	if (scanf("%d%d%d",&x,&y,&z) != 2) {
+		fprintf(stdout, "Invalid command\n");
+		return;
+	}
+	if (imagine.cl == 0) {
+		scanf("%*d%*d");
+		fprintf(stdout, "Black and white image needed\n");
+		return;
+	}
+	if ((x & (x-1)) == 1) {
+		fprintf(stdout, "Invalid set of parameters\n");
+		return;
+	}
+	int frecv[256], ajutor;
+	for(int i = 0; i < 256; i++)
+		frecv[i] = 0;
+	interval = 256 / y;/// calculez marimea intervalului, cate valori acopera
+	int maxim = -1;
+	for (int i = 0 ; i < imagine.inaltime; i++)
+		for (int j = 0 ;j < imagine.latime; j++) {
+			ajutor = (int)imagine.gri[i][j];
+			frecv[ajutor]++;
+		}
+	int suma = 0;	
+	for (int i = 0 ; i < 256; i+=interval) {
+		suma = 0; 
+		for( int j = i; j < i+interval; j++)
+		suma = suma+frecv[j];
+			if(suma > maxim)
+				maxim = suma;
+	}			
+	int s = 0;
+	for (int i = 0 ; i < 255 ; i = i + interval) {
+		s = 0;
+		stelute = 0;
+		for (int j = i; j < i+interval; j++) {
+			s = s+frecv[j];
+		}
+		stelute = (int)floor(((double)s/maxim)*x);
+		fprintf(stdout, "%d	", stelute);
+		fprintf(stdout, "|	");
+		for (int k = 0 ; k < stelute; k++)
+			fprintf(stdout, "*");
+		fprintf(stdout, "\n");	
+	}
+}
+
+int clampe(int x)
+{
+	if (x < 0)
+		return 0;
+	if (x > 255)
+		return 255;
+	return x;
+}
+
+void equalize(img *imagine)
+{
+	if (imagine->ok == 0) {
+		fprintf(stdout, "No image loaded\n");
+		return;
+	}
+	if (imagine->cl == 0) {
+		fprintf(stdout, "Black and white image needed\n");
+		return;
+	}
+	double area, constant;
+	area = (double)(imagine->inaltime * imagine->latime);
+	int frecv[256], ajutor;
+	for (int i = 0; i < 256; i++)
+		frecv[i] = 0;
+	constant = 255 / area;
+	constant = round(constant);
+	for(int i = 0 ; i < imagine->inaltime; i++){
+		for(int j = 0 ;j < imagine->latime; j++){
+			ajutor = (int)imagine->gri[i][j];
+			frecv[ajutor]++;
+		}
+	}
+	double suma, numar, val_pixel;		
+	for (int i = 0 ; i < imagine->inaltime; i++) {
+		for (int j = 0 ;j < imagine->latime; j++) {
+			val_pixel = imagine->gri[i][j];
+			for (int k = 0; k <= val_pixel; k++)
+				suma = suma + frecv[k];
+			numar = constant * suma;
+			if (numar > 255)
+				numar = 255;
+			if (numar < 0)
+				numar = 0;	
+			numar = round(numar);		
+			imagine->gri[i][j] = numar;
+			suma = 0;	
+		}
+	}
+	fprintf(stdout, "Equalize done\n");			
+}
+
+void crop(img *imagine)
+{
+	int x1, x2, y1, y2;
+	x1 = imagine->x1;
+	x2 = imagine->x2;
+	y1 = imagine->y1;
+	y2 = imagine->y2;
+	if (imagine->ok == 0) {
+		fprintf(stdout, "No image loaded\n");
+		return;
+	}
+	if (imagine->cl == 1) {
+	double **copie = (double **)malloc((y2-y1) * sizeof(double *));
+		for (int i=0; i < (y2-y1); i++)
+			copie[i] = malloc((x2-x1) * sizeof(double));
+	for (int i = 0 ; i < (y2-y1); i++) {
+		for (int j = 0; j < (x2-x1); j++) {
+			copie[i][j] = imagine->gri[i+y1][j+x1];
+		}
+	}
+	for (int i = 0; i < imagine->inaltime; i++)
+		free(imagine->gri[i]);
+	free(imagine->gri);		
+	imagine->gri = copie;
+	imagine->x1 = 0;
+	imagine->y1 = 0;
+	imagine->x2 = x2 - x1;
+	imagine->y2 = y2 - y1;
+	imagine->inaltime = y2 - y1;
+	imagine->latime = x2 - x1; 
+	} else {
+		double **copie_rosu = (double **)malloc((y2 - y1) * sizeof(double *));
+		for (int i = 0; i < (y2 - y1); i++)
+			copie_rosu[i] = malloc((x2 - x1) * sizeof(double));
+		for (int i = 0 ; i < (y2 - y1); i++) {
+			for (int j = 0; j < (x2 - x1); j++) {
+				copie_rosu[i][j] = imagine->rosu[i + y1][j + x1];
+		}
+	}	
+	double **copie_verde = (double **)malloc((y2 - y1) * sizeof(double *));
+		for (int i = 0; i < (y2 - y1); i++)
+			copie_verde[i] = malloc((x2 - x1) * sizeof(double));
+		for (int i = 0 ; i < (y2 - y1); i++) {
+			for (int j = 0; j < (x2 - x1); j++) {
+				copie_verde[i][j] = imagine->verde[i + y1][j + x1];
+				
+		}
+	}	
+	double **copie_albastru = (double **)malloc((y2 - y1) * sizeof(double *));
+		for(int i = 0; i < (y2 - y1); i++)
+			copie_albastru[i] = malloc((x2 - x1) * sizeof(double));
+		for(int i = 0 ; i < (y2 - y1); i++){
+			for(int j = 0; j < (x2 - x1); j++){
+				copie_albastru[i][j] = imagine->albastru[i + y1][j + x1];		
+		}
+	}
+	for(int i = 0; i < imagine->inaltime; i++)
+		free(imagine->rosu[i]);
+	free(imagine->rosu);
+	for(int i = 0; i < imagine->inaltime; i++)
+		free(imagine->verde[i]);
+	free(imagine->verde);
+	for(int i = 0; i < imagine->inaltime; i++)
+		free(imagine->albastru[i]);
+	free(imagine->albastru);
+	imagine->rosu = copie_rosu;
+	imagine->albastru = copie_albastru;
+	imagine->verde = copie_verde;
+	imagine->x1 = 0;
+	imagine->y1 = 0;
+	imagine->x2 = x2 - x1;
+	imagine->y2= y2 - y1;
+	imagine->inaltime = y2 - y1;
+	imagine->latime = x2 - x1;
+	} 
+	fprintf(stdout, "Image cropped\n");
+}
+
+void save(img *imagine)
+{
+	char filename[20], caracter;
+	scanf("%s", filename);
+	scanf("%c", &caracter);
+	if (imagine->ok == 0) {
+		fprintf(stdout, "No image loaded\n");
+		char comanda[20];
+		if (caracter == ' ') {
+			scanf("%[^\n]", comanda);
+		}
+		return;
+	}
+	FILE *out;
+	out = fopen(filename, "wt");
+	int bin_asc = 0;
+	if (caracter == ' ') {
+		char caracter2[20];
+		scanf("%s", caracter2);
+		if (strcmp(caracter2, "ascii") != 0) { 
+			bin_asc = 0;
+		} else { 
+			bin_asc = 1;
+			if (imagine->cl == 1) 
+				fprintf(out, "%s\n", "P2");
+			else
+				fprintf(out, "%s\n", "P3");
+			fprintf(out, "%d %d\n%d\n", imagine->latime, imagine->inaltime, imagine->maxi);
+			///salvez ascii
+			for (int i = 0; i < imagine->inaltime; i++) {
+				for (int j = 0; j < imagine->latime; j++) {
+					if (imagine->cl == 1) {
+						fprintf(out, "%d ", (int)round(imagine->gri[i][j]));
+					} else {
+						int aux;
+						aux = imagine->albastru[i][j];
+						fprintf(out, "%d ", (int)round(imagine->rosu[i][j]));
+						fprintf(out, "%d ", (int)round(imagine->verde[i][j]));
+						fprintf(out, "%d ", (int)round(aux));
+					}		
+				}
+				fprintf(out, "\n");
+			}
+			fclose(out);
+		}
+	} else
+		bin_asc = 0;
+	if (bin_asc == 0) {
+			if (imagine->cl == 1)
+				fprintf(out, "%s\n", "P5");
+			else
+				fprintf(out, "%s\n", "P6");
+			fprintf(out, "%d %d\n%d\n", imagine->latime, imagine->inaltime, imagine->maxi);
+			fclose(out);
+			///salvez binar
+			FILE *out = fopen(filename, "ab");
+			for (int i = 0; i < imagine->inaltime; i++) {
+				for (int j = 0; j < imagine->latime; j++) {
+					if (imagine->cl == 1) {
+						unsigned char x;
+						x = (unsigned char)round(imagine->gri[i][j]);
+						fwrite(&x, sizeof(unsigned char), 1, out);
+					} else {
+						unsigned char x, y, z;
+						x = (unsigned char)round(imagine->rosu[i][j]);
+						y = (unsigned char)round(imagine->verde[i][j]);
+						z = (unsigned char)round(imagine->albastru[i][j]);
+						fwrite(&x, sizeof(unsigned char), 1, out);
+						fwrite(&y, sizeof(unsigned char), 1, out);
+						fwrite(&z, sizeof(unsigned char), 1, out);
+					}
+				}
+			}
+		fclose(out);					
+	}	
+	fprintf(stdout, "Saved %s\n", filename);
+}
+
+void aplica_filtrul(img *imagine, int tip)
+{
+	int x1,x2,y1,y2;
+	x1 = imagine->x1;
+	x2 = imagine->x2;
+	y1 = imagine->y1;
+	y2 = imagine->y2;
+	double **copie_rosu = (double **)malloc((y2 - y1) * sizeof(double *));
+	for(int i=0; i < (y2 - y1); i++)
+		copie_rosu[i] = malloc((x2-x1) * sizeof(double));
+	double **copie_verde = (double **)malloc((y2 - y1) * sizeof(double *));
+	for(int i=0; i < (y2 - y1); i++)
+		copie_verde[i] = malloc((x2 - x1) * sizeof(double));
+	double **copie_albastru = (double **)malloc((y2 - y1) * sizeof(double *));
+	for(int i=0; i < (y2 - y1); i++)
+		copie_albastru[i] = malloc((x2-x1) * sizeof(double));		
+	double suma_rosu = 0, suma_verde = 0, suma_blu = 0;
+	for( int i = y1; i < y2; i++){
+		for( int j = x1; j < x2; j++){
+			suma_rosu = 0;
+			suma_verde = 0;
+			suma_blu = 0;
+			int a1,a2;
+			a1=imagine->inaltime;
+			a2=imagine->latime;
+			if (i != 0 && j != 0 && i != a1 - 1 && j != a2 - 1){
+				for (int p = -1; p <= 1; p++)
+					for (int t = -1; t <= 1; t++){
+						if(tip == 0){
+							suma_rosu += imagine->rosu[i + p][j + t] *
+								edge[p + 1][t + 1];
+							suma_verde += imagine->verde[i + p][j + t] *
+								edge[p + 1][t + 1];
+							suma_blu += imagine->albastru[i + p][j + t] *
+								edge[p + 1][t + 1];
+						}
+						if(tip == 1){
+							suma_rosu += imagine->rosu[i + p][j + t] * 
+								sharpen[p + 1][t + 1];
+							suma_verde += imagine->verde[i + p][j + t] * 
+								sharpen[p + 1][t + 1];
+							suma_blu += imagine->albastru[i + p][j + t] * 
+								sharpen[p + 1][t + 1];
+						}
+						if(tip == 2){
+							suma_rosu += imagine->rosu[i + p][j + t] * 
+								blur[p + 1][t + 1];
+							suma_verde += imagine->verde[i + p][j + t] * 
+								blur[p + 1][t + 1];
+							suma_blu += imagine->albastru[i + p][j + t] *
+								blur[p + 1][t + 1];
+						}
+						if(tip == 3){
+							suma_rosu += imagine->rosu[i + p][j + t] * 
+								gauss[p + 1][t + 1];
+							suma_verde += imagine->verde[i + p][j + t] * 
+								gauss[p + 1][t + 1];
+							suma_blu += imagine->albastru[i + p][j + t] * 
+								gauss[p + 1][t + 1];
+						}	
+					}			
+			}
+			copie_rosu[i - y1][j - x1] = clampe(suma_rosu);
+			copie_verde[i - y1][j - x1] = clampe(suma_verde);
+			copie_albastru[i - y1][j - x1] = clampe(suma_blu);
+			}	
+		}
+		for (int i = y1; i < y2; i++)
+			for (int j = x1; j < x2; j++)
+			if (i != 0 && j != 0 && i != imagine->inaltime - 1 &&
+				j != imagine->latime - 1) {    
+				imagine->rosu[i][j] = copie_rosu[i - y1][j - x1];
+				imagine->verde[i][j] = copie_verde[i - y1][j - x1];
+				imagine->albastru[i][j] = copie_albastru[i - y1][j - x1];
+				}
+		for(int i=0; i < (y2-y1); i++)
+			free(copie_rosu[i]);
+		free(copie_rosu);
+		for(int i=0; i < (y2-y1); i++)
+			free(copie_verde[i]);
+		free(copie_verde);
+		for(int i=0; i < (y2-y1); i++)
+			free(copie_albastru[i]);
+		free(copie_albastru);
+		if(tip == 0)			
+		fprintf(stdout, "APPLY EDGE done\n");
+		if(tip == 1)			
+		fprintf(stdout, "APPLY SHARPEN done\n");
+		if(tip == 2)			
+		fprintf(stdout, "APPLY BLUR done\n");	
+		if(tip == 3)			
+		fprintf(stdout, "APPLY GAUSSIAN_BLUR done\n");
+}
+
+void apply(img *imagine)
+{
+	if (imagine->ok == 0) {
+		fprintf(stdout, "No image loaded\n");
+		char caracter;
+		while (scanf("%c",&caracter))
+			if (caracter == '\n')
+				break;
+		return;
+	}
+	char caracter;
+	scanf("%c", &caracter);
+	if (caracter == '\n') {
+		fprintf(stdout, "Invalid command\n");
+		return;
+	}
+	if (imagine->cl == 1) {
+		fprintf(stdout, "Easy, Charlie Chaplin\n");
+		return;
+	}
+	char filtru[13];
+	scanf("%s", filtru);
+	if (strcmp(filtru, "EDGE") == 0) {
+		aplica_filtrul(imagine, 0);
+	} else if ( strcmp(filtru, "SHARPEN") == 0) {
+		aplica_filtrul(imagine, 1);
+
+	} else if (strcmp(filtru, "BLUR") == 0) {
+		aplica_filtrul(imagine, 2);
+
+	} else if (strcmp(filtru, "GAUSSIAN_BLUR") == 0) {
+		aplica_filtrul(imagine, 3);
+	} else {
+		fprintf(stdout, "APPLY parameter invalid\n");
+		return;
+	}
+}
+int main(void)
+{
+	char command[10];
+	img imagine;
+	imagine.ok = 0;
+	while (1) {
+		scanf("%s", command);
+		if (strcmp (command, "LOAD") == 0) {
+			incarcare(&imagine);
+		}
+		else if (strcmp(command, "SELECT") == 0) {
+			selecta(&imagine);
+		}
+		else if (strcmp(command, "HISTOGRAM") == 0) {
+			histograma(imagine);
+		}
+		else if (strcmp(command, "EQUALIZE") == 0) {
+			equalize(&imagine);
+		}
+		else if (strcmp(command, "APPLY") == 0) {
+			apply(&imagine);
+		}
+		else if (strcmp(command, "CROP") == 0) {
+			crop(&imagine);
+		}
+		else if (strcmp(command, "SAVE") == 0) {
+			save(&imagine);
+		}
+		else if (strcmp(command, "EXIT") == 0 ) {
+			if (imagine.ok == 0) {
+				fprintf(stdout, "No image loaded\n");
+				return 0;
+			} else {
+				free_img(&imagine);	
+				return 0;
+				}	
+		} else {
+			fprintf(stdout, "Invalid command\n");
+			char chr;
+			while (scanf("%c", &chr))
+				if (chr == '\n')
+					break;
+		}	
+	}
+	return 0;
+}
