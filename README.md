@@ -1,64 +1,98 @@
-# image-editor
-All the pixels of the image are stored as dinamically alocated matrices, using malloc() and free() functions from the stdlib.h library.
+```markdown
+#Text Editor for PPM and PGM Images
 
-*) I defined the datatype 'image', that contains all the necessary information about the loaded image, including the dinamically allocated matrices of pixels.
+This project is a command-line text editor designed to manipulate PPM and PGM image files. It supports a range of operations such as loading, selecting, editing, saving, and processing images. The program handles commands sequentially in a loop until the `EXIT` command is received.
 
-*) I defined the structure 'filter_values' that stores the kernel values of the filters that can be applied.
+---
 
-*) There are 8 possible commands that can be recieved from input:
+## Supported Commands
 
-LOAD - Load the image from the given file into memory
-SELECT ALL - Select the whole image
-SELECT - Select a portion of the image, situated between the given indices
-CROP - Crop the selection, keeping the new smaller image
-ROTATE - Rotate the selection with given angle
-APPLY - Apply one of the filters to the selection
-SAVE [ascii] - Save the selection into a plain / ascii file
-EXIT - Free the allocated memory and exit the program
-Commands:
-LOAD
+### 1. **LOAD**
+- Loads a PPM or PGM image file into memory.
+- Skips comments and reads the image type and pixel data.
+- Supports grayscale, black-and-white, and color images.
+- If the file does not exist or is invalid, displays an error message and frees any previously loaded image data.
+- By default, the entire image is selected after loading.
 
-free the memory of the previously loaded image, if it exists
-store all the information located in the header about the new image (magic word, width, height, max value)
-allocate memory for the pixel matrices (1 matrix for grayscale / 3 matrices for RGB)
-using the magic word, decide whether the image is stored as plain or binary and read the values accordingly
-store the value of each pixel in the specific matrices (gray/red/green/blue)
-select the whole image
-SELECT ALL
+---
 
-select the whole image
-same as 'SELECT 0 0 img->width img->height'
-SELECT
+### 2. **SELECT**
+- Allows selecting a specific region of the image or the entire image.
+- **Usage:**
+  - `SELECT ALL`: Selects the entire image.
+  - `SELECT x1 y1 x2 y2`: Selects a rectangular region specified by the coordinates `(x1, y1)` and `(x2, y2)`.
+- If the coordinates are invalid or if no image is loaded, an error message is displayed.
 
-check if the coordinates are valid
-memorise the selection
-CROP
+---
 
-allocate memory for a temporary matrix that will represent the cropped channel
-crop each channel based on the given selection and store the values in the specific temporary matrix
-free memory of the old channel
-allocate memory for the new channel that will have a smaller no. of pixels
-save the values from the temporary matrix
-free the memory for the temporary matrix
-ROTATE
+### 3. **SAVE**
+- Saves the current image to a file.
+- Supports ASCII and binary formats, depending on the command's format specifier.
+- Writes pixel values based on the image type (grayscale or color).
 
-check if angle is a valid integer
-rotate the selection for each channel to the right until meeting the desired angle I. if the selection is not equal to the whole matrix: - allocate memory for a temporary matrix that stores the rotated selection - update the values in the selection to the new ones - frees the temporary matrix II. if the selection is equal to the whole matrix: - allocate memory for a temporary matrix that stores the rotated image - free the memory for the given channel with dimesions w x h - allocate memory for the channel with dimensions h x w - set the values in the channel to the new ones - free the temporary matrix * after each image rotation make sure to change the width & height of the image and select all of it
-APPLY
+---
 
-apply one of the filters: EDGE, SHARPEN, BLUR, GAUSSIAN BLUR
-allocate new matrices for each color channel (RGB), which will initially have the elements of the selection
-compute the kernel sum for each pixel, then save the sum as the new pixel value
-update the value for the pixels in selection to the new filtered ones
-free the temporary matrices
-SAVE [ascii]
+### 4. **CROP**
+- Crops the image to the selected region.
+- Allocates new memory for the cropped region and updates the image dimensions.
+- Frees the memory of the original image and replaces it with the cropped version.
 
-read the file where the image should be saved
-check whether keyword 'ascii' is present => image will be saved as plain; otherwise, image will be saved as binary
-save the new magic word and the image's header in the file
-save the pixel values for each channel, either as plain or binary
-close the files
-EXIT
+---
 
-free the memory for the loaded image, if it exists
-stop the program
+### 5. **EQUALIZE**
+- Equalizes the histogram of the grayscale image.
+- Computes the frequency of each pixel value and adjusts the pixel intensities using a standard histogram equalization algorithm.
+
+---
+
+### 6. **APPLY**
+- Applies a filter to the image.
+- Supported filters: `edge`, `sharpen`, `gaussian_blur`, and `blur`.
+- Filters are applied using a 3x3 kernel and involve convolution calculations.
+- If the image is not in color format, an error message is displayed.
+
+---
+
+### 7. **HISTOGRAM**
+- Generates a histogram for grayscale or black-and-white images.
+- Groups pixel intensities into bins and calculates their frequencies.
+- Displays the histogram using stars (`*`) to represent frequency magnitudes.
+
+---
+
+### 8. **ROTATE**
+- Rotates the image by a specified angle (90°, 180°, 270°).
+- Only square selections can be rotated unless the entire image is selected.
+- Supports both grayscale and color images.
+
+---
+
+### 9. **EXIT**
+- Frees all allocated memory and terminates the program.
+- Displays an appropriate message if no image is loaded.
+
+---
+
+## Implementation Details
+
+1. **Memory Management**:
+   - Dynamically allocates memory for image matrices and auxiliary structures.
+   - Frees memory after operations like cropping, equalizing, and exiting.
+
+2. **Error Handling**:
+   - Verifies the validity of commands and their parameters.
+   - Displays meaningful error messages for invalid operations or missing files.
+
+3. **Image Processing**:
+   - Handles color and grayscale images differently where necessary.
+   - Implements efficient algorithms for operations like filtering, cropping, and histogram generation.
+
+4. **File Handling**:
+   - Reads and writes image data in both ASCII and binary formats.
+   - Ensures compatibility with standard PPM and PGM image formats.
+
+---
+
+## Summary
+This text-based image editor provides essential functionalities for managing and processing PPM and PGM images. With its modular and efficient implementation, it enables users to perform advanced image manipulations without a graphical interface.
+```
